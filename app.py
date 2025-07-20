@@ -1,9 +1,11 @@
 from flask import Flask, request, send_file, jsonify
+import cv2
+import numpy as np
 import io
-import random
-from datetime import datetime
 from PIL import Image
 import piexif
+from datetime import datetime
+import random
 
 app = Flask(__name__)
 
@@ -55,34 +57,38 @@ def index():
 
 @app.route('/convert', methods=['POST'])
 def convert():
-    if 'image' not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
-
-    file = request.files['image']
     try:
-        image = Image.open(file.stream).convert("RGB")
-    except Exception as e:
-        return jsonify({"error": f"Invalid image: {str(e)}"}), 400
+        img_array = np.frombuffer(request.data, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
-    webp_image = convert_to_webp(image)
-    return send_file(webp_image, mimetype="image/webp")
+        if img is None:
+            return "Invalid image", 400
+
+        image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        webp_image = convert_to_webp(image)
+        return send_file(webp_image, mimetype="image/webp")
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route('/convert-with-exif', methods=['POST'])
 def convert_with_exif():
-    if 'image' not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
-
-    file = request.files['image']
     try:
-        image = Image.open(file.stream).convert("RGB")
-    except Exception as e:
-        return jsonify({"error": f"Invalid image: {str(e)}"}), 400
+        img_array = np.frombuffer(request.data, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
-    output = io.BytesIO()
-    exif_bytes = generate_fake_exif(image.width, image.height)
-    image.save(output, format="JPEG", exif=exif_bytes, quality=95)
-    output.seek(0)
-    return send_file(output, mimetype="image/jpeg")
+        if img is None:
+            return "Invalid image", 400
+
+        image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        exif_bytes = generate_fake_exif(image.width, image.height)
+        output = io.BytesIO()
+        image.save(output, format="JPEG", exif=exif_bytes, quality=95)
+        output.seek(0)
+        return send_file(output, mimetype="image/jpeg")
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)
