@@ -21,8 +21,24 @@ def generate_fake_exif(width, height):
         "Canon": ["Canon EOS R5", "Canon EOS Rebel T8i"],
     }
     cities = [
-        {"lat": [40, 42, 46], "latRef": "N", "lon": [74, 0, 21], "lonRef": "W"},
-        {"lat": [34, 3, 8], "latRef": "N", "lon": [118, 14, 37], "lonRef": "W"},
+        {
+            "lat": [(40, 1), (42, 1), (46, 1)],
+            "latRef": "N",
+            "lon": [(74, 1), (0, 1), (21, 1)],
+            "lonRef": "W"
+        },
+        {
+            "lat": [(34, 1), (3, 1), (8, 1)],
+            "latRef": "N",
+            "lon": [(118, 1), (14, 1), (37, 1)],
+            "lonRef": "W"
+        },
+        {
+            "lat": [(36, 1), (45, 1), (0, 1)],
+            "latRef": "N",
+            "lon": [(3, 1), (3, 1), (0, 1)],
+            "lonRef": "E"
+        }
     ]
 
     brand = random.choice(list(camera_data.keys()))
@@ -56,27 +72,43 @@ def index():
     return "WebP & EXIF API is running!"
 
 @app.route('/convert-with-exif', methods=['POST'])
-def convert_with_exif_then_webp():
+def convert_with_exif():
     try:
-        # استلام الصورة من الباينري
+        # Step 1: Read the image
+        img_array = np.frombuffer(request.data, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        if img is None:
+            return "Invalid image", 400
+
+        # Step 2: Convert to PIL and add EXIF
+        image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        exif_bytes = generate_fake_exif(image.width, image.height)
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", exif=exif_bytes, quality=95)
+        buffer.seek(0)
+
+        # Step 3: Read modified image again and pass to convert()
+        img_with_exif = cv2.imdecode(np.frombuffer(buffer.read(), np.uint8), cv2.IMREAD_COLOR)
+        pil_image = Image.fromarray(cv2.cvtColor(img_with_exif, cv2.COLOR_BGR2RGB))
+        webp_image = convert_to_webp(pil_image)
+
+        return send_file(webp_image, mimetype="image/webp")
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/convert', methods=['POST'])
+def convert():
+    try:
         img_array = np.frombuffer(request.data, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
         if img is None:
             return "Invalid image", 400
 
-        # تحويل إلى PIL + إضافة EXIF
         image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        exif_bytes = generate_fake_exif(image.width, image.height)
-        jpeg_output = io.BytesIO()
-        image.save(jpeg_output, format="JPEG", exif=exif_bytes, quality=95)
-        jpeg_output.seek(0)
-
-        # الآن نحول من JPEG إلى WebP
-        jpeg_image = Image.open(jpeg_output)
-        webp_output = convert_to_webp(jpeg_image)
-
-        return send_file(webp_output, mimetype="image/webp")
+        webp_image = convert_to_webp(image)
+        return send_file(webp_image, mimetype="image/webp")
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
