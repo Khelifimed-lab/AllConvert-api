@@ -1,8 +1,7 @@
 from flask import Flask, request, send_file, jsonify
-import cv2
-import numpy as np
 import io
-import requests
+import random
+from datetime import datetime
 from PIL import Image
 import piexif
 
@@ -15,9 +14,6 @@ def convert_to_webp(image: Image.Image, quality: int = 90):
     return output
 
 def generate_fake_exif(width, height):
-    from datetime import datetime
-    import random
-
     camera_data = {
         "SONY": ["ILCE-7M3", "ILCE-9"],
         "Canon": ["Canon EOS R5", "Canon EOS Rebel T8i"],
@@ -59,32 +55,28 @@ def index():
 
 @app.route('/convert', methods=['POST'])
 def convert():
-    file_id = request.json.get("file_id")
-    if not file_id:
-        return jsonify({"error": "Missing file_id"}), 400
+    if 'image' not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
 
+    file = request.files['image']
     try:
-        url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        response = requests.get(url)
-        image = Image.open(io.BytesIO(response.content)).convert("RGB")
+        image = Image.open(file.stream).convert("RGB")
     except Exception as e:
-        return jsonify({"error": f"Failed to fetch image: {str(e)}"}), 400
+        return jsonify({"error": f"Invalid image: {str(e)}"}), 400
 
     webp_image = convert_to_webp(image)
     return send_file(webp_image, mimetype="image/webp")
 
 @app.route('/convert-with-exif', methods=['POST'])
 def convert_with_exif():
-    file_id = request.json.get("file_id")
-    if not file_id:
-        return jsonify({"error": "Missing file_id"}), 400
+    if 'image' not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
 
+    file = request.files['image']
     try:
-        url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        response = requests.get(url)
-        image = Image.open(io.BytesIO(response.content)).convert("RGB")
+        image = Image.open(file.stream).convert("RGB")
     except Exception as e:
-        return jsonify({"error": f"Failed to fetch image: {str(e)}"}), 400
+        return jsonify({"error": f"Invalid image: {str(e)}"}), 400
 
     output = io.BytesIO()
     exif_bytes = generate_fake_exif(image.width, image.height)
