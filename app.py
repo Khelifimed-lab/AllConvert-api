@@ -74,41 +74,26 @@ def index():
 @app.route('/convert-with-exif', methods=['POST'])
 def convert_with_exif():
     try:
-        # Step 1: Read the image
+        # Step 1: اقرأ الصورة المرسلة
         img_array = np.frombuffer(request.data, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         if img is None:
             return "Invalid image", 400
 
-        # Step 2: Convert to PIL and add EXIF
+        # Step 2: تحويل إلى PIL وإضافة EXIF وهمي
         image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         exif_bytes = generate_fake_exif(image.width, image.height)
-        buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", exif=exif_bytes, quality=95)
-        buffer.seek(0)
 
-        # Step 3: Read modified image again and pass to convert()
-        img_with_exif = cv2.imdecode(np.frombuffer(buffer.read(), np.uint8), cv2.IMREAD_COLOR)
-        pil_image = Image.fromarray(cv2.cvtColor(img_with_exif, cv2.COLOR_BGR2RGB))
-        webp_image = convert_to_webp(pil_image)
+        # Step 3: احفظها مؤقتًا في JPEG مع EXIF
+        temp_jpeg = io.BytesIO()
+        image.save(temp_jpeg, format="JPEG", exif=exif_bytes, quality=95)
+        temp_jpeg.seek(0)
 
-        return send_file(webp_image, mimetype="image/webp")
+        # Step 4: اقرأ الصورة من جديد (التي فيها EXIF) ثم حول إلى WebP
+        updated_img = Image.open(temp_jpeg).convert("RGB")
+        webp_output = convert_to_webp(updated_img)
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route('/convert', methods=['POST'])
-def convert():
-    try:
-        img_array = np.frombuffer(request.data, np.uint8)
-        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-        if img is None:
-            return "Invalid image", 400
-
-        image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        webp_image = convert_to_webp(image)
-        return send_file(webp_image, mimetype="image/webp")
+        return send_file(webp_output, mimetype="image/webp")
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
