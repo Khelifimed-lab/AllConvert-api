@@ -55,37 +55,28 @@ def generate_fake_exif(width, height):
 def index():
     return "WebP & EXIF API is running!"
 
-@app.route('/convert', methods=['POST'])
-def convert():
-    try:
-        img_array = np.frombuffer(request.data, np.uint8)
-        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-        if img is None:
-            return "Invalid image", 400
-
-        image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        webp_image = convert_to_webp(image)
-        return send_file(webp_image, mimetype="image/webp")
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
 @app.route('/convert-with-exif', methods=['POST'])
-def convert_with_exif():
+def convert_with_exif_then_webp():
     try:
+        # استلام الصورة من الباينري
         img_array = np.frombuffer(request.data, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
         if img is None:
             return "Invalid image", 400
 
+        # تحويل إلى PIL + إضافة EXIF
         image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         exif_bytes = generate_fake_exif(image.width, image.height)
-        output = io.BytesIO()
-        image.save(output, format="JPEG", exif=exif_bytes, quality=95)
-        output.seek(0)
-        return send_file(output, mimetype="image/jpeg")
+        jpeg_output = io.BytesIO()
+        image.save(jpeg_output, format="JPEG", exif=exif_bytes, quality=95)
+        jpeg_output.seek(0)
+
+        # الآن نحول من JPEG إلى WebP
+        jpeg_image = Image.open(jpeg_output)
+        webp_output = convert_to_webp(jpeg_image)
+
+        return send_file(webp_output, mimetype="image/webp")
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
