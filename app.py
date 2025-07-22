@@ -21,24 +21,8 @@ def generate_fake_exif(width, height):
         "Canon": ["Canon EOS R5", "Canon EOS Rebel T8i"],
     }
     cities = [
-        {
-            "lat": [(40, 1), (42, 1), (46, 1)],
-            "latRef": "N",
-            "lon": [(74, 1), (0, 1), (21, 1)],
-            "lonRef": "W"
-        },
-        {
-            "lat": [(34, 1), (3, 1), (8, 1)],
-            "latRef": "N",
-            "lon": [(118, 1), (14, 1), (37, 1)],
-            "lonRef": "W"
-        },
-        {
-            "lat": [(36, 1), (45, 1), (0, 1)],
-            "latRef": "N",
-            "lon": [(3, 1), (3, 1), (0, 1)],
-            "lonRef": "E"
-        }
+        {"lat": [(40, 42, 46), "N"], "lon": [(74, 0, 21), "W"]},
+        {"lat": [(34, 3, 8), "N"], "lon": [(118, 14, 37), "W"]},
     ]
 
     brand = random.choice(list(camera_data.keys()))
@@ -58,45 +42,92 @@ def generate_fake_exif(width, height):
         piexif.ExifIFD.PixelYDimension: height,
     }
     gps = {
-        piexif.GPSIFD.GPSLatitudeRef: city["latRef"],
-        piexif.GPSIFD.GPSLatitude: city["lat"],
-        piexif.GPSIFD.GPSLongitudeRef: city["lonRef"],
-        piexif.GPSIFD.GPSLongitude: city["lon"],
+        piexif.GPSIFD.GPSLatitudeRef: city["lat"][1],
+        piexif.GPSIFD.GPSLatitude: [(x, 1) for x in city["lat"][0]],
+        piexif.GPSIFD.GPSLongitudeRef: city["lon"][1],
+        piexif.GPSIFD.GPSLongitude: [(x, 1) for x in city["lon"][0]],
     }
 
     exif_dict = {"0th": zeroth, "Exif": exif, "GPS": gps}
+    return piexif.dump(exif_dict)
+
+def generate_lina_exif(width, height):
+    now = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+    zeroth = {
+        piexif.ImageIFD.Make: "Lina Creative Studio",
+        piexif.ImageIFD.Model: "LinaVision 1.0",
+        piexif.ImageIFD.Software: "LinaColor Touch",
+        piexif.ImageIFD.DateTime: now,
+    }
+    exif = {
+        piexif.ExifIFD.DateTimeOriginal: now,
+        piexif.ExifIFD.PixelXDimension: width,
+        piexif.ExifIFD.PixelYDimension: height,
+    }
+
+    exif_dict = {"0th": zeroth, "Exif": exif}
     return piexif.dump(exif_dict)
 
 @app.route('/')
 def index():
     return "WebP & EXIF API is running!"
 
-@app.route('/convert-with-exif', methods=['POST'])
-def convert_with_exif():
+@app.route('/convert', methods=['POST'])
+def convert():
     try:
-        # Step 1: اقرأ الصورة المرسلة
         img_array = np.frombuffer(request.data, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
         if img is None:
             return "Invalid image", 400
 
-        # Step 2: تحويل إلى PIL وإضافة EXIF وهمي
+        image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        webp_image = convert_to_webp(image)
+        return send_file(webp_image, mimetype="image/webp")
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/convert-with-exif', methods=['POST'])
+def convert_with_exif():
+    try:
+        img_array = np.frombuffer(request.data, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+        if img is None:
+            return "Invalid image", 400
+
         image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         exif_bytes = generate_fake_exif(image.width, image.height)
 
-        # Step 3: احفظها مؤقتًا في JPEG مع EXIF
-        temp_jpeg = io.BytesIO()
-        image.save(temp_jpeg, format="JPEG", exif=exif_bytes, quality=95)
-        temp_jpeg.seek(0)
+        output = io.BytesIO()
+        image.save(output, format="JPEG", exif=exif_bytes, quality=95)
+        output.seek(0)
+        return send_file(output, mimetype="image/jpeg")
 
-        # Step 4: اقرأ الصورة من جديد (التي فيها EXIF) ثم حول إلى WebP
-        updated_img = Image.open(temp_jpeg).convert("RGB")
-        webp_output = convert_to_webp(updated_img)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
-        return send_file(webp_output, mimetype="image/webp")
+@app.route('/convert-with-lina-exif', methods=['POST'])
+def convert_with_lina_exif():
+    try:
+        img_array = np.frombuffer(request.data, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+        if img is None:
+            return "Invalid image", 400
+
+        image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        exif_bytes = generate_lina_exif(image.width, image.height)
+
+        output = io.BytesIO()
+        image.save(output, format="JPEG", exif=exif_bytes, quality=95)
+        output.seek(0)
+        return send_file(output, mimetype="image/jpeg")
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)
+
