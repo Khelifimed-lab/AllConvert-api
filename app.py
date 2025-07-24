@@ -61,7 +61,7 @@ def generate_lina_exif(width, height, description=None, keywords=None):
         piexif.ImageIFD.Software: "LinaColor Touch",
         piexif.ImageIFD.DateTime: now,
         piexif.ImageIFD.Artist: "Lina Khelifi",
-        piexif.ImageIFD.Copyright: f"© {current_year} Lina Creative Studio - Todos os direitos reservados",
+        piexif.ImageIFD.Copyright: f"Copyright {current_year} Lina Creative Studio - Todos os direitos reservados"
     }
 
     if description:
