@@ -51,14 +51,25 @@ def generate_fake_exif(width, height):
     exif_dict = {"0th": zeroth, "Exif": exif, "GPS": gps}
     return piexif.dump(exif_dict)
 
-def generate_lina_exif(width, height):
+def generate_lina_exif(width, height, description=None, keywords=None):
     now = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+    current_year = datetime.now().year
+
     zeroth = {
         piexif.ImageIFD.Make: "Lina Creative Studio",
         piexif.ImageIFD.Model: "LinaVision 1.0",
         piexif.ImageIFD.Software: "LinaColor Touch",
         piexif.ImageIFD.DateTime: now,
+        piexif.ImageIFD.Artist: "Lina Khelifi",
+        piexif.ImageIFD.Copyright: f"© {current_year} Lina Creative Studio - Todos os direitos reservados",
     }
+
+    if description:
+        zeroth[piexif.ImageIFD.ImageDescription] = description.encode("utf-8")
+
+    if keywords:
+        zeroth[40094] = keywords.encode("utf-16le")  # XPKeywords
+
     exif = {
         piexif.ExifIFD.DateTimeOriginal: now,
         piexif.ExifIFD.PixelXDimension: width,
@@ -118,7 +129,11 @@ def convert_with_lina_exif():
             return "Invalid image", 400
 
         image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        exif_bytes = generate_lina_exif(image.width, image.height)
+
+        description = request.headers.get("X-Image-Description")
+        keywords = request.headers.get("X-Image-Keywords")
+
+        exif_bytes = generate_lina_exif(image.width, image.height, description, keywords)
 
         output = io.BytesIO()
         image.save(output, format="JPEG", exif=exif_bytes, quality=95)
@@ -130,4 +145,3 @@ def convert_with_lina_exif():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
